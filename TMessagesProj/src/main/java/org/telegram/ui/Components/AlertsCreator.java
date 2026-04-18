@@ -7711,7 +7711,7 @@ public class AlertsCreator {
                 // wgram feature
                 final ArrayList<Integer> finalIds = ids;
                 final long finalDialogId = thisDialogId;
-                wgram.DeletedMessages.getQueue().postRunnable(() -> {
+                wgram.Storage.getQueue().postRunnable(() -> {
                     for (Integer mid : finalIds) {
                         wgram.DeletedMessages.clearSpecificDeletedMessage(finalDialogId, mid, false);
                     }
@@ -7739,7 +7739,7 @@ public class AlertsCreator {
                     // wgram feature
                     final ArrayList<Integer> finalIds = ids;
                     final long finalDialogId = thisDialogId;
-                    wgram.DeletedMessages.getQueue().postRunnable(() -> {
+                    wgram.Storage.getQueue().postRunnable(() -> {
                         for (Integer mid : finalIds) {
                             wgram.DeletedMessages.clearSpecificDeletedMessage(finalDialogId, mid, false);
                         }

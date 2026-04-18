@@ -6,46 +6,16 @@ import org.telegram.SQLite.SQLitePreparedStatement;
 import org.telegram.messenger.*;
 import org.telegram.tgnet.TLRPC;
 
-import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.FutureTask;
 
 public class DeletedMessages {
     // ROM cache block
-    private static final DispatchQueue queue = new DispatchQueue("WGramDeletedMessagesQueue");
-    private static volatile SQLiteDatabase deletedMessagesROMdb;
-
-    static {
-        queue.postRunnable(() -> {
-            try {
-                File filesDir = new File(ApplicationLoader.getFilesDirFixed(), "wgram.db");
-                deletedMessagesROMdb = new SQLiteDatabase(filesDir.getAbsolutePath());
-                deletedMessagesROMdb.executeFast(
-                        "CREATE TABLE IF NOT EXISTS del_m (" +
-                                "account_id INTEGER," +
-                                "dialog_id INTEGER," +
-                                "message_id INTEGER," +
-                                "PRIMARY KEY (account_id, dialog_id, message_id)" +
-                                ");"
-                ).stepThis().dispose();
-            } catch (Exception e) {
-                AndroidUtilities.runOnUIThread(() -> {
-                    FileLog.e("Wgram: Cannot init ROM db");
-                    throw new RuntimeException("WGram: Failed to initialize ROM database. App cannot continue.");
-                });
-            }
-        });
-    }
-
-    public static DispatchQueue getQueue() {
-        return queue;
-    }
-
     public static boolean RomCheckIsMarked(MessageObject object) {
-        if (!Thread.currentThread().getName().equals(queue.getName())) {
+        if (Thread.currentThread().getId() != Storage.getQueue().getId()) {
             FutureTask<Boolean> task = new FutureTask<>(() -> RomCheckIsMarked(object));
-            queue.postRunnable(task);
+            Storage.getQueue().postRunnable(task);
             try {
                 return task.get();
             } catch (Exception e) {
@@ -56,7 +26,7 @@ public class DeletedMessages {
 
         SQLiteCursor cursor = null;
         try {
-            cursor = deletedMessagesROMdb.queryFinalized(
+            cursor = Storage.getDb().queryFinalized(
                     "SELECT 1 FROM del_m WHERE account_id = ? AND dialog_id = ? AND message_id = ? LIMIT 1",
                     AccountState.instance.currentAccountId.get(),
                     object.getDialogId(),
@@ -79,7 +49,7 @@ public class DeletedMessages {
         long did = object.getDialogId();
         int mid = object.getId();
 
-        queue.postRunnable(() -> {
+        Storage.getQueue().postRunnable(() -> {
             // Lookup ROM
             boolean mark = RomCheckIsMarked(object);
 
@@ -102,13 +72,13 @@ public class DeletedMessages {
     }
 
     public static void RomMark(long dialogId, int messageId) {
-        if (!Thread.currentThread().getName().equals(queue.getName())) {
-            queue.postRunnable(() -> RomMark(dialogId, messageId));
+        if (Thread.currentThread().getId() != Storage.getQueue().getId()) {
+            Storage.getQueue().postRunnable(() -> RomMark(dialogId, messageId));
             return;
         }
 
         try {
-            SQLitePreparedStatement state = deletedMessagesROMdb.executeFast(
+            SQLitePreparedStatement state = Storage.getDb().executeFast(
                     "INSERT OR REPLACE INTO del_m (account_id, dialog_id, message_id) VALUES (?, ?, ?)"
             );
             state.bindLong(1, AccountState.instance.currentAccountId.get());
@@ -198,8 +168,8 @@ public class DeletedMessages {
     }
 
     public static Exception clearSpecificDeletedMessage(long didOrCid, int messageId, boolean deleteOnOriginStorage) {
-        if (!Thread.currentThread().getName().equals(queue.getName())) {
-            queue.postRunnable(() -> clearSpecificDeletedMessage(didOrCid, messageId, deleteOnOriginStorage));
+        if (Thread.currentThread().getId() != Storage.getQueue().getId()) {
+            Storage.getQueue().postRunnable(() -> clearSpecificDeletedMessage(didOrCid, messageId, deleteOnOriginStorage));
             return null;
         }
 
@@ -226,15 +196,17 @@ public class DeletedMessages {
                 });
             }
 
+            SQLiteDatabase databaseStorage = Storage.getDb();
+
             // Remove from WGram ROM storage
-            deletedMessagesROMdb.executeFast("BEGIN").stepThis().dispose();
-            SQLitePreparedStatement st = deletedMessagesROMdb.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=? AND message_id=?");
+            databaseStorage.executeFast("BEGIN").stepThis().dispose();
+            SQLitePreparedStatement st = databaseStorage.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=? AND message_id=?");
             st.bindLong(1, instance.getUserConfig().clientUserId);
             st.bindLong(2, didOrCid);
             st.bindInteger(3, messageId);
             st.step();
             st.dispose();
-            deletedMessagesROMdb.executeFast("COMMIT").stepThis().dispose();
+            databaseStorage.executeFast("COMMIT").stepThis().dispose();
 
             // Remove from WGram RAM cache
             ConcurrentHashMap<Integer, MessageRecord> records = map.get(didOrCid);
@@ -250,8 +222,8 @@ public class DeletedMessages {
     }
 
     public static Exception clearDeletedMessagesOnChat(long didOrCid, boolean deleteOnOriginStorage) {
-        if (!Thread.currentThread().getName().equals(queue.getName())) {
-            queue.postRunnable(() -> clearDeletedMessagesOnChat(didOrCid, deleteOnOriginStorage));
+        if (Thread.currentThread().getId() != Storage.getQueue().getId()) {
+            Storage.getQueue().postRunnable(() -> clearDeletedMessagesOnChat(didOrCid, deleteOnOriginStorage));
             return null;
         }
 
@@ -263,7 +235,9 @@ public class DeletedMessages {
 
         SQLiteCursor cursor = null;
         try {
-            cursor = deletedMessagesROMdb.queryFinalized(
+            SQLiteDatabase databaseStorage = Storage.getDb();
+
+            cursor = databaseStorage.queryFinalized(
                     "SELECT message_id FROM del_m WHERE account_id=? AND dialog_id=?",
                     instance.getUserConfig().clientUserId, didOrCid
             );
@@ -291,13 +265,13 @@ public class DeletedMessages {
             }
 
             // Remove from WGram ROM storage
-            deletedMessagesROMdb.executeFast("BEGIN").stepThis().dispose();
-            SQLitePreparedStatement st = deletedMessagesROMdb.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=?");
+            databaseStorage.executeFast("BEGIN").stepThis().dispose();
+            SQLitePreparedStatement st = databaseStorage.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=?");
             st.bindLong(1, instance.getUserConfig().clientUserId);
             st.bindLong(2, didOrCid);
             st.step();
             st.dispose();
-            deletedMessagesROMdb.executeFast("COMMIT").stepThis().dispose();
+            databaseStorage.executeFast("COMMIT").stepThis().dispose();
 
             // Remove from WGram RAM cache
             map.remove(didOrCid);
@@ -312,8 +286,8 @@ public class DeletedMessages {
     }
 
     public static Exception clearDeletedMessages(boolean mediaNoRemove) {
-        if (!Thread.currentThread().getName().equals(queue.getName())) {
-            queue.postRunnable(() -> clearDeletedMessages(mediaNoRemove));
+        if (Thread.currentThread().getId() != Storage.getQueue().getId()) {
+            Storage.getQueue().postRunnable(() -> clearDeletedMessages(mediaNoRemove));
             return null;
         }
 
@@ -321,7 +295,9 @@ public class DeletedMessages {
 
         SQLiteCursor cursor = null;
         try {
-            cursor = deletedMessagesROMdb.queryFinalized(
+            SQLiteDatabase databaseStorage = Storage.getDb();
+
+            cursor = databaseStorage.queryFinalized(
                     "SELECT dialog_id, message_id FROM del_m WHERE account_id=?",
                     instance.getUserConfig().clientUserId
             );
@@ -360,8 +336,8 @@ public class DeletedMessages {
                 });
 
                 // Remove from WGram ROM storage
-                deletedMessagesROMdb.executeFast("BEGIN").stepThis().dispose();
-                SQLitePreparedStatement st = deletedMessagesROMdb.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=? AND message_id=?");
+                databaseStorage.executeFast("BEGIN").stepThis().dispose();
+                SQLitePreparedStatement st = databaseStorage.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=? AND message_id=?");
                 for (int mid: entry.getValue()) {
                     st.requery();
                     st.bindLong(1, instance.getUserConfig().clientUserId);
@@ -370,7 +346,7 @@ public class DeletedMessages {
                     st.step();
                 }
                 st.dispose();
-                deletedMessagesROMdb.executeFast("COMMIT").stepThis().dispose();
+                databaseStorage.executeFast("COMMIT").stepThis().dispose();
 
                 // Remove from WGram RAM cache
                 ConcurrentHashMap<Integer, MessageRecord> records = map.get(entry.getKey());

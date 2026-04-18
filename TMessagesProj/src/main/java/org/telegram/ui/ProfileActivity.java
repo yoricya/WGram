@@ -2972,7 +2972,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         return;
                     }
 
-                    DeletedMessages.getQueue().postRunnable(() -> {
+                    wgram.Storage.getQueue().postRunnable(() -> {
                         if (BuildVars.DEBUG_VERSION) {
                             FileLog.d("Wgram: clear delm history: cid="+chatId+" did="+dialogId+" nid="+did);
                         }
