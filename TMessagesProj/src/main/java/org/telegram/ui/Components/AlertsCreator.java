@@ -7707,6 +7707,17 @@ public class AlertsCreator {
                 if (mergeDialogId != 0 && selectedMessage.messageOwner.peer_id != null && selectedMessage.messageOwner.peer_id.chat_id == -mergeDialogId) {
                     thisDialogId = mergeDialogId;
                 }
+
+                // wgram feature
+                final ArrayList<Integer> finalIds = ids;
+                final long finalDialogId = thisDialogId;
+                wgram.DeletedMessages.getQueue().postRunnable(() -> {
+                    for (Integer mid : finalIds) {
+                        wgram.DeletedMessages.clearSpecificDeletedMessage(finalDialogId, mid, false);
+                    }
+                });
+                // end
+
                 MessagesController.getInstance(currentAccount).deleteMessages(ids, random_ids, encryptedChat, thisDialogId, topicId, deleteForAll[0], mode);
             } else {
                 for (int a = 1; a >= 0; a--) {
@@ -7724,6 +7735,17 @@ public class AlertsCreator {
                             }
                         }
                     }
+
+                    // wgram feature
+                    final ArrayList<Integer> finalIds = ids;
+                    final long finalDialogId = thisDialogId;
+                    wgram.DeletedMessages.getQueue().postRunnable(() -> {
+                        for (Integer mid : finalIds) {
+                            wgram.DeletedMessages.clearSpecificDeletedMessage(finalDialogId, mid, false);
+                        }
+                    });
+                    // end
+
                     MessagesController.getInstance(currentAccount).deleteMessages(ids, random_ids, encryptedChat, (a == 1 && mergeDialogId != 0) ? mergeDialogId : thisDialogId, topicId, deleteForAll[0], mode);
                     selectedMessages[a].clear();
                 }
