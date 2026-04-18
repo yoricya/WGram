@@ -32,6 +32,11 @@ public class NotificationCenter {
     public static final int closeChats = totalEvents++;
     public static final int closeChatActivity = totalEvents++;
     public static final int closeProfileActivity = totalEvents++;
+
+    // WGram feature
+    public static final int wgramMessagesMarkAsDeleted = totalEvents++;
+    // end
+
     public static final int messagesDeleted = totalEvents++;
     public static final int historyCleared = totalEvents++;
     public static final int messagesRead = totalEvents++;

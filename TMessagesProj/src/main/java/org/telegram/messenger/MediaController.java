@@ -110,6 +110,10 @@ import org.telegram.ui.PhotoViewer;
 import org.telegram.ui.Stories.DarkThemeResourceProvider;
 import org.telegram.ui.Stories.recorder.StoryEntry;
 
+// wgram feature
+import wgram.TweakSettings;
+// end
+
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -1718,7 +1722,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 }
                 cursor.close();
             }
-            if (!screenshotDates.isEmpty()) {
+            if (!TweakSettings.AllowScreenshots && !screenshotDates.isEmpty()) { // wgram tweak
                 AndroidUtilities.runOnUIThread(() -> {
                     NotificationCenter.getInstance(lastChatAccount).postNotificationName(NotificationCenter.screenshotTook);
                     checkScreenshots(screenshotDates);

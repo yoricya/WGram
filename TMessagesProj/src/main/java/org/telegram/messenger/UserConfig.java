@@ -24,7 +24,9 @@ import java.util.Arrays;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 3;
+
+    // WGram tweak
+    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 4;
     public final static int MAX_ACCOUNT_COUNT = 4;
 
     private final Object sync = new Object();
@@ -83,6 +85,7 @@ public class UserConfig extends BaseController {
     LongSparseArray<SaveToGallerySettingsHelper.DialogException> groupsSaveGalleryExceptions;
 
 
+    // Блять паша это че нахуй
     private static volatile UserConfig[] Instance = new UserConfig[UserConfig.MAX_ACCOUNT_COUNT];
     public static UserConfig getInstance(int num) {
         UserConfig localInstance = Instance[num];

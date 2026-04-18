@@ -49,7 +49,8 @@ public class BaseController {
         return parentAccountInstance.getNotificationsController();
     }
 
-    protected final NotificationCenter getNotificationCenter() {
+    // WGram change
+    public final NotificationCenter getNotificationCenter() {
         return parentAccountInstance.getNotificationCenter();
     }
 
@@ -57,7 +58,8 @@ public class BaseController {
         return parentAccountInstance.getUserConfig();
     }
 
-    protected final MessagesStorage getMessagesStorage() {
+    // WGram change
+    public final MessagesStorage getMessagesStorage() {
         return parentAccountInstance.getMessagesStorage();
     }
 

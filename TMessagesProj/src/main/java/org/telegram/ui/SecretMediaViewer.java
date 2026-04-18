@@ -34,6 +34,13 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
+
+// wgram feature
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
+// end
+
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.dynamicanimation.animation.FloatValueHolder;
@@ -66,47 +73,23 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
 
-import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.Emoji;
-import org.telegram.messenger.ImageLocation;
-import org.telegram.messenger.ImageReceiver;
-import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.MessageObject;
-import org.telegram.messenger.MessagesController;
-import org.telegram.messenger.NotificationCenter;
-import org.telegram.messenger.FileLoader;
-import org.telegram.messenger.FileLog;
-import org.telegram.messenger.R;
-import org.telegram.messenger.SharedConfig;
-import org.telegram.messenger.UserConfig;
+// wgram changed
+import org.telegram.messenger.*;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.ActionBar;
-import org.telegram.ui.ActionBar.SimpleTextView;
-import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.ActionBar.*;
 import org.telegram.ui.Cells.TextSelectionHelper;
-import org.telegram.ui.Components.AnimatedEmojiDrawable;
-import org.telegram.ui.Components.AnimatedEmojiSpan;
-import org.telegram.ui.Components.AnimationProperties;
-import org.telegram.ui.Components.CubicBezierInterpolator;
-import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.PlayPauseDrawable;
-import org.telegram.ui.Components.RLottieDrawable;
+import org.telegram.ui.Components.*;
 import org.telegram.ui.Components.Scroller;
-import org.telegram.ui.Components.TimerParticles;
-import org.telegram.ui.Components.TranslateAlert2;
-import org.telegram.ui.Components.VideoPlayer;
-import org.telegram.ui.Components.VideoPlayerSeekBar;
 import org.telegram.ui.Stories.DarkThemeResourceProvider;
 import org.telegram.ui.Stories.recorder.HintView2;
+import wgram.TweakSettings;
+// end
 
 import java.io.File;
 import java.util.ArrayList;
@@ -470,6 +453,13 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+
+        // WGram feature
+        if (wgram.TweakSettings.KeepDeletedMessages) {
+            return;
+        }
+        // end
+
         if (id == NotificationCenter.messagesDeleted) {
             boolean scheduled = (Boolean) args[2];
             if (scheduled) {
@@ -865,6 +855,15 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 secretDeleteTimer.setAlpha(alpha);
             }
         };
+
+        // WGram feature
+        ActionBarMenu menu = actionBar.createMenu();
+        menu.addItem(1001, R.drawable.msg_download);
+        menu.setClickable(true);
+        menu.setEnabled(true);
+        menu.setFocusable(true);
+        // end
+
         actionBar.setTitleColor(0xffffffff);
         actionBar.setSubtitleColor(0xffffffff);
         actionBar.setBackgroundColor(Theme.ACTION_BAR_PHOTO_VIEWER_COLOR);
@@ -880,16 +879,27 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 if (id == -1) {
                     closePhoto(true, false);
                 }
+
+                // WGram feature
+                if (id == 1001) {
+                    // not implemented, idk how to save it, just use screenshot
+                }
+                // end
             }
         });
 
         secretHint = new HintView2(activity, HintView2.DIRECTION_TOP);
-        secretHint.setJoint(1, -26);
-        secretHint.setPadding(dp(8), dp(8), dp(8), dp(8));
-        containerView.addView(secretHint, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.TOP | Gravity.RIGHT, 0, 48, 0, 0));
-
         secretDeleteTimer = new SecretDeleteTimer(activity);
-        containerView.addView(secretDeleteTimer, LayoutHelper.createFrame(119, 48, Gravity.TOP | Gravity.RIGHT, 0, 0, 0, 0));
+
+        // wgram tweak
+        if (!TweakSettings.KeepDeletedMessages) {
+            secretHint.setJoint(1, -26);
+            secretHint.setPadding(dp(8), dp(8), dp(8), dp(8));
+            containerView.addView(secretHint, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.TOP | Gravity.RIGHT, 0, 48, 0, 0));
+
+            containerView.addView(secretDeleteTimer, LayoutHelper.createFrame(119, 48, Gravity.TOP | Gravity.RIGHT, 0, 0, 0, 0));
+        }
+        // end
 
         final VideoPlayerSeekBar.SeekBarDelegate seekBarDelegate = new VideoPlayerSeekBar.SeekBarDelegate() {
             @Override
@@ -974,8 +984,14 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
-        windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
-        AndroidUtilities.logFlagSecure();
+
+        // WGram tweak
+        if (!TweakSettings.AllowScreenshots) {
+            windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+            AndroidUtilities.logFlagSecure();
+        }
+        // end
+
         centerImage.setParentView(containerView);
         centerImage.setForceCrossfade(true);
 
@@ -1390,7 +1406,9 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
 
         //messageObject.messageOwner.destroyTime = (int) (System.currentTimeMillis() / 1000 + ConnectionsManager.getInstance().getTimeDifference()) + 4;
 
-        ignoreDelete = messageObject.messageOwner.ttl == 0x7FFFFFFF;
+        // WGram tweak
+        ignoreDelete = wgram.TweakSettings.KeepDeletedMessages || wgram.DeletedMessages.isMarked(messageObject) || messageObject.messageOwner.ttl == 0x7FFFFFFF;
+        // end
         this.onClose = onClose;
 
         currentProvider = provider;
@@ -2156,6 +2174,15 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
     }
 
     private void onPhotoClosed(PhotoViewer.PlaceProviderObject object) {
+        // wgram feature
+        if ((wgram.TweakSettings.KeepDeletedMessages || currentMessageObject != null && wgram.DeletedMessages.isMarked(currentMessageObject)) && currentMessageObject != null) {
+            currentMessageObject.messageOwner.destroyTime = 0;
+            currentMessageObject.messageOwner.destroyTimeMillis = 0;
+            currentMessageObject.messageOwner.ttl = 0x7FFFFFFF;
+            currentMessageObject.forceExpired = false;
+        }
+        // end
+
         isVisible = false;
         currentProvider = null;
         disableShowCheck = false;

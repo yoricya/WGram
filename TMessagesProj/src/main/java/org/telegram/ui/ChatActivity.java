@@ -340,6 +340,9 @@ import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.core.BitwiseUtils;
 import me.vkryl.core.reference.ReferenceList;
 
+// wgram feature
+import wgram.TweakSettings;
+
 @SuppressWarnings("unchecked")
 public class ChatActivity extends BaseFragment implements
         NotificationCenter.NotificationCenterDelegate,
@@ -2768,7 +2771,11 @@ public class ChatActivity extends BaseFragment implements
 
         if (chatMode != MODE_SCHEDULED) {
             if (threadMessageId == 0) {
-                getNotificationCenter().addObserver(this, NotificationCenter.screenshotTook);
+                // wgram feature
+                if (!TweakSettings.AllowScreenshots)
+                    getNotificationCenter().addObserver(this, NotificationCenter.screenshotTook);
+                // end
+
                 getNotificationCenter().addObserver(this, NotificationCenter.encryptedChatUpdated);
                 getNotificationCenter().addObserver(this, NotificationCenter.messagesReadEncrypted);
                 getNotificationCenter().addObserver(this, NotificationCenter.updateMentionsCount);
@@ -2821,6 +2828,11 @@ public class ChatActivity extends BaseFragment implements
         getNotificationCenter().addObserver(this, NotificationCenter.didLoadSendAsPeers);
         getNotificationCenter().addObserver(this, NotificationCenter.closeChats);
         getNotificationCenter().addObserver(this, NotificationCenter.closeChatActivity);
+
+        // wgram feature
+        getNotificationCenter().addObserver(this, NotificationCenter.wgramMessagesMarkAsDeleted);
+        // end
+
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().addObserver(this, NotificationCenter.historyCleared);
         getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByServer);
@@ -3297,6 +3309,11 @@ public class ChatActivity extends BaseFragment implements
         getNotificationCenter().removeObserver(this, NotificationCenter.monoForumMessagesRead);
         getNotificationCenter().removeObserver(this, NotificationCenter.commentsRead);
         getNotificationCenter().removeObserver(this, NotificationCenter.changeRepliesCounter);
+
+        // wgram feature
+        getNotificationCenter().removeObserver(this, NotificationCenter.wgramMessagesMarkAsDeleted);
+        // end
+
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().removeObserver(this, NotificationCenter.historyCleared);
         getNotificationCenter().removeObserver(this, NotificationCenter.messageReceivedByServer);
@@ -3313,7 +3330,12 @@ public class ChatActivity extends BaseFragment implements
         getNotificationCenter().removeObserver(this, NotificationCenter.contactsDidLoad);
         getNotificationCenter().removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
         getNotificationCenter().removeObserver(this, NotificationCenter.messagePlayingDidReset);
-        getNotificationCenter().removeObserver(this, NotificationCenter.screenshotTook);
+
+        // wgram feature
+        if (!TweakSettings.AllowScreenshots)
+            getNotificationCenter().removeObserver(this, NotificationCenter.screenshotTook);
+        // end
+
         getNotificationCenter().removeObserver(this, NotificationCenter.blockedUsersDidLoad);
         getNotificationCenter().removeObserver(this, NotificationCenter.fileNewChunkAvailable);
         getNotificationCenter().removeObserver(this, NotificationCenter.didCreatedNewDeleteTask);
@@ -15265,6 +15287,29 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private Runnable sendSecretMessageRead(MessageObject messageObject, boolean readNow) {
+        // WGram feature
+        if (wgram.TweakSettings.KeepDeletedMessages) {
+            if (wgram.DeletedMessages.isMarked(messageObject)) {
+                return null;
+            }
+
+            if (messageObject != null && messageObject.needDrawBluredPreview()) {
+                wgram.DeletedMessages.mark(messageObject.getDialogId(), messageObject.getId());
+                messageObject.messageOwner.destroyTime = 0;
+                messageObject.messageOwner.destroyTimeMillis = 0;
+                messageObject.messageOwner.ttl = 0x7FFFFFFF;
+                messageObject.forceExpired = false;
+                return () -> {
+                    if (currentEncryptedChat != null) {
+                        getMessagesController().markMessageAsRead(dialog_id, messageObject.messageOwner.random_id, Integer.MIN_VALUE);
+                    } else {
+                        getMessagesController().markMessageAsRead2(dialog_id, messageObject.getId(), null, 0, 0, false);
+                    }
+                };
+            }
+        }
+        // end
+
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.destroyTime != 0 || messageObject.messageOwner.ttl <= 0) {
             return null;
         }
@@ -15294,6 +15339,15 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private Runnable sendSecretMediaDelete(MessageObject messageObject) {
+        // Wgram feature
+        if (wgram.TweakSettings.KeepDeletedMessages) {
+            messageObject.messageOwner.destroyTime = 0;
+            messageObject.messageOwner.destroyTimeMillis = 0;
+            messageObject.messageOwner.ttl = 0x7FFFFFFF;
+            return () -> {};
+        }
+        // end
+
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.ttl != 0x7FFFFFFF) {
             return null;
         }
@@ -21762,6 +21816,12 @@ public class ChatActivity extends BaseFragment implements
             if (updated && chatAdapter != null) {
                 chatAdapter.notifyDataSetChanged(false);
             }
+
+        } else if (id == NotificationCenter.wgramMessagesMarkAsDeleted) { // Wgram feature
+            long channelId = (Long) args[1];
+            ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
+
+            updateDeletedMessagesLocally(markAsDeletedMessages); // end
         } else if (id == NotificationCenter.messagesDeleted) {
             boolean scheduled = (Boolean) args[2];
             if (scheduled != (chatMode == MODE_SCHEDULED)) {
@@ -22263,7 +22323,7 @@ public class ChatActivity extends BaseFragment implements
                     clearHistory((Boolean) args[1], (TLRPC.TL_updates_channelDifferenceTooLong) args[2]);
                 }
             }
-        } else if (id == NotificationCenter.screenshotTook) {
+        } else if (!TweakSettings.AllowScreenshots && id == NotificationCenter.screenshotTook) { // wgram tweak
             updateInformationForScreenshotDetector();
         } else if (id == NotificationCenter.blockedUsersDidLoad) {
             if (currentUser != null && !UserObject.isReplyUser(currentUser)) {
@@ -25515,6 +25575,31 @@ public class ChatActivity extends BaseFragment implements
         }
         return sponsoredMessagesCount;
     }
+
+    // WGram feature
+    private void updateDeletedMessagesLocally(ArrayList<Integer> deletedIds) {
+        if (deletedIds == null || deletedIds.isEmpty() || chatAdapter == null || messages == null) {
+            return;
+        }
+
+        ArrayList<Integer> positionsToRefresh = new ArrayList<>();
+
+        for (int i = 0; i < messages.size(); i++) {
+            MessageObject obj = messages.get(i);
+            if (deletedIds.contains(obj.getId())) {
+                obj.forceUpdate = true;
+                positionsToRefresh.add(chatAdapter.messagesStartRow + i);
+            }
+        }
+
+        if (!positionsToRefresh.isEmpty()) {
+            for (int pos : positionsToRefresh) {
+                chatAdapter.notifyItemChanged(pos);
+            }
+            updateVisibleRows();
+        }
+    }
+    // end
 
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent) {
         processDeletedMessages(markAsDeletedMessages, channelId, sent, true);
@@ -40125,7 +40210,9 @@ public class ChatActivity extends BaseFragment implements
             } else if (message.needDrawBluredPreview()) {
                 Runnable openAction = sendSecretMessageRead(message, false);
                 Runnable closeAction = sendSecretMediaDelete(message);
-                cell.invalidate();
+                // wgram tweak
+                if (!TweakSettings.KeepDeletedMessages) cell.invalidate();
+                // end
                 SecretMediaViewer.getInstance().setParentActivity(getParentActivity());
                 SecretMediaViewer.getInstance().openMedia(message, photoViewerProvider, openAction, closeAction);
             } else if (MessageObject.isAnimatedEmoji(message.getDocument()) && MessageObject.getInputStickerSet(message.getDocument()) != null) {

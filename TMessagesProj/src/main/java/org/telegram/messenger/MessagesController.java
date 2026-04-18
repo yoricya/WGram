@@ -113,6 +113,10 @@ import org.telegram.ui.bots.BotWebViewAttachedSheet;
 import org.telegram.ui.bots.BotWebViewSheet;
 import org.telegram.ui.bots.WebViewRequestProps;
 
+// wgram feature
+import wgram.TweakSettings;
+// end
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11006,6 +11010,12 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
+        // wgram feature
+        if (wgram.TweakSettings.TypingHide) {
+            return false;
+        }
+        // end
+
         if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
@@ -20034,6 +20044,23 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         });
 
+        // Wgram feature
+        if (wgram.TweakSettings.KeepDeletedMessages && deletedMessages != null) {
+            for (int a = 0, size = deletedMessages.size(); a < size; a++) {
+                ArrayList<Integer> arrayList = deletedMessages.valueAt(a);
+                if (arrayList == null) {
+                    continue;
+                }
+
+                long dialogId = deletedMessages.keyAt(a);
+
+                for (Integer id : arrayList) {
+                    wgram.DeletedMessages.mark(dialogId, id);
+                }
+            }
+        }
+        // end
+
         LongSparseIntArray markAsReadMessagesInboxFinal = markAsReadMessagesInbox;
         LongSparseIntArray markAsReadMessagesOutboxFinal = markAsReadMessagesOutbox;
         LongSparseArray<ArrayList<Integer>> markContentAsReadMessagesFinal = markContentAsReadMessages;
@@ -20132,36 +20159,54 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (arrayList == null) {
                         continue;
                     }
-                    getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
-                    if (dialogId == 0) {
-                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                            Integer id = arrayList.get(b);
-                            MessageObject obj = dialogMessagesByIds.get(id);
-                            if (obj != null) {
-                                if (BuildVars.LOGS_ENABLED) {
-                                    FileLog.d("mark messages " + obj.getId() + " deleted");
-                                }
-                                obj.deleted = true;
-                            }
-                        }
+
+                    // wgram feature
+                    if (TweakSettings.KeepDeletedMessages) {
+                        getNotificationCenter().postNotificationName(NotificationCenter.wgramMessagesMarkAsDeleted, arrayList, -dialogId, false);
                     } else {
-                        ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
-                        if (objs != null) {
-                            for (int i = 0; i < objs.size(); ++i) {
-                                MessageObject obj = objs.get(i);
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
+
+                        if (dialogId == 0) {
+                            for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                Integer id = arrayList.get(b);
+                                MessageObject obj = dialogMessagesByIds.get(id);
                                 if (obj != null) {
-                                    for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                        if (obj.getId() == arrayList.get(b)) {
-                                            obj.deleted = true;
-                                            break;
+                                    if (BuildVars.LOGS_ENABLED) {
+                                        FileLog.d("mark messages " + obj.getId() + " deleted");
+                                    }
+
+                                    if (!wgram.TweakSettings.KeepDeletedMessages) {
+                                        obj.deleted = true;
+                                    }
+                                }
+                            }
+                        } else {
+                            ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                            if (objs != null) {
+                                for (int i = 0; i < objs.size(); ++i) {
+                                    MessageObject obj = objs.get(i);
+                                    if (obj != null) {
+                                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                            if (obj.getId() == arrayList.get(b)) {
+                                                if (!wgram.TweakSettings.KeepDeletedMessages) {
+                                                    obj.deleted = true;
+                                                }
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    // end
                 }
-                getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
+
+                // wgram feature
+                if (!wgram.TweakSettings.KeepDeletedMessages) {
+                    getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
+                }
+                // end
             }
             if (deletedQuickRepliesMessagesFinal != null) {
                 for (int a = 0, size = deletedQuickRepliesMessagesFinal.size(); a < size; a++) {
@@ -20245,7 +20290,9 @@ public class MessagesController extends BaseController implements NotificationCe
                 getMessagesStorage().markMessagesContentAsRead(key, arrayList, currentTime2, markContentAsReadMessagesDate);
             }
         }
-        if (deletedMessages != null) {
+
+        // WGram tweak
+        if (deletedMessages != null && !wgram.TweakSettings.KeepDeletedMessages) {
             for (int a = 0, size = deletedMessages.size(); a < size; a++) {
                 long key = deletedMessages.keyAt(a);
                 ArrayList<Integer> arrayList = deletedMessages.valueAt(a);

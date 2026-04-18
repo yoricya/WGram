@@ -64,6 +64,12 @@ public class FlagSecureReason {
             return;
         }
 
+        // wgram feature
+        if (wgram.TweakSettings.AllowScreenshots) {
+            return;
+        }
+        // end
+
         if (isSecuredNow(window)) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
             AndroidUtilities.logFlagSecure();

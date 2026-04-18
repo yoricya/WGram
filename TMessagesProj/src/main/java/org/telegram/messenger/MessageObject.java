@@ -210,6 +210,11 @@ public class MessageObject {
     public int dateKeyInt;
     public String monthKey;
     public boolean deleted;
+
+    // Wgram feature
+    public boolean wgramMarkAsDeleted;
+    // end
+
     public boolean deletedByThanos;
     public float audioProgress;
     public float forceSeekTo = -1;

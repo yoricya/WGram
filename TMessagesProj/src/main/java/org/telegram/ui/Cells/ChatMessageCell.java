@@ -248,6 +248,11 @@ import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.core.BitwiseUtils;
 
+// wgram feature
+import wgram.TweakSettings;
+// end
+
+
 public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate, ImageReceiver.ImageReceiverDelegate,
         DownloadController.FileDownloadProgressListener, TextSelectionHelper.SelectableView,
         NotificationCenter.NotificationCenterDelegate, FactorAnimator.Target {
@@ -13048,6 +13053,12 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     private boolean isCurrentLocationTimeExpired(MessageObject messageObject) {
+        // wgram feature
+        if (TweakSettings.KeepDeletedMessages) {
+            return false;
+        }
+        // end
+
         final int period = MessageObject.getMedia(currentMessageObject.messageOwner).period;
         final int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
         if (period == 0x7fffffff) {
@@ -18317,6 +18328,13 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 currentTimeString = TextUtils.concat(formatString(R.string.MessageScheduledRepeatSeconds, period), ", ", currentTimeString);
             }
         }
+
+        // WGram feature
+        if (wgram.DeletedMessages.isMarked(messageObject)){
+            currentTimeString += " \uD83D\uDCBE";
+        }
+        // end
+
         timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
