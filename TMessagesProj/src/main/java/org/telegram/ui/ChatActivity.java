@@ -342,7 +342,9 @@ import me.vkryl.core.BitwiseUtils;
 import me.vkryl.core.reference.ReferenceList;
 
 // wgram feature
+import wgram.DeletedMessages;
 import wgram.TweakSettings;
+// end
 
 @SuppressWarnings("unchecked")
 public class ChatActivity extends BaseFragment implements
@@ -1187,6 +1189,10 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_SUGGESTION_EDIT_TIME = 112;
     public final static int OPTION_SUGGESTION_EDIT_MESSAGE = 113;
     public final static int OPTION_SUGGESTION_ADD_OFFER = 114;
+
+    // wgram feature
+    public final static int OPTION_CLEAR_WGRAM_DELM = 5301;
+    // end
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
             NotificationCenter.messagesRead,
@@ -32487,6 +32493,21 @@ public class ChatActivity extends BaseFragment implements
                 });
                 break;
             }
+            // wgram feature
+            case OPTION_CLEAR_WGRAM_DELM: {
+                if (getParentActivity() == null) {
+                    selectedObject = null;
+                    selectedObjectToEditCaption = null;
+                    selectedObjectGroup = null;
+                    return;
+                }
+                preserveDim = false;
+                if (selectedObject.wgramMarkAsDeleted) {
+                    DeletedMessages.clearSpecificDeletedMessage(selectedObject.getDialogId(), selectedObject.getId(), true);
+                }
+                break;
+            }
+            // end
             case OPTION_DELETE: {
                 if (getParentActivity() == null) {
                     selectedObject = null;
@@ -44375,6 +44396,14 @@ public class ChatActivity extends BaseFragment implements
             options.add(OPTION_HIDE_SPONSORED_MESSAGE);
             icons.add(R.drawable.msg_block2);
         }
+
+        // wgram feature
+        if (!allowChatActions && message.wgramMarkAsDeleted) {
+            items.add("Clear deleted message");
+            options.add(OPTION_CLEAR_WGRAM_DELM);
+            icons.add(R.drawable.msg_delete);
+        }
+        // end
 
         if (message.isSponsored() && message.sponsoredCanReport) {
             items.add(LocaleController.getString(R.string.AboutRevenueSharingAds));
