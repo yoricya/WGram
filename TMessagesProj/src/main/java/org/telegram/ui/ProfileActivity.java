@@ -336,6 +336,10 @@ import java.util.zip.ZipOutputStream;
 
 import me.vkryl.android.animator.BoolAnimator;
 
+// wgram feature
+import wgram.DeletedMessages;
+// end
+
 public class ProfileActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate, MainTabsActivity.TabFragmentDelegate {
     private final static int PHONE_OPTION_CALL = 0,
             PHONE_OPTION_COPY = 1,
@@ -593,6 +597,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int delete_group = 45;
     private final static int enable_no_forwards = 46;
     private final static int disable_no_forwards = 47;
+
+    // wgram feature
+    private final static int wgram_clear_delm_history = 5101;
+    // end
 
     private Rect rect = new Rect();
 
@@ -2949,7 +2957,36 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 } else if (id == add_photo) {
                     onWriteButtonClick();
-                }
+                } else if (id == wgram_clear_delm_history) { // wgram feature
+                    final long did;
+                    if (dialogId != 0) {
+                        did = dialogId;
+                    } else if (userId != 0) {
+                        did = userId;
+                    } else {
+                        did = -chatId;
+                    }
+
+                    if (did == 0) {
+                        AndroidUtilities.runOnUIThread(() -> BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.error, "Can not clear deleted messages on this chat.").show());
+                        return;
+                    }
+
+                    DeletedMessages.getQueue().postRunnable(() -> {
+                        if (BuildVars.DEBUG_VERSION) {
+                            FileLog.d("Wgram: clear delm history: cid="+chatId+" did="+dialogId+" nid="+did);
+                        }
+
+                        Exception e = DeletedMessages.clearDeletedMessagesOnChat(did, true);
+                        if (e != null) {
+                            AndroidUtilities.runOnUIThread(() -> BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.error, "Ecxeption while clear deleted messages on chat.").show());
+                            FileLog.e(e);
+                            return;
+                        }
+
+                        AndroidUtilities.runOnUIThread(() -> BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.contact_check, "Deleted messages cleared on chat.").show());
+                    });
+                } // end
             }
         });
 
@@ -11855,6 +11892,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         boolean leaveAction = false;
         boolean addStoryAction = false;
 
+        // wgram feature
+        if (BuildVars.DEBUG_VERSION) {
+            FileLog.d("Wgram: profile init: did="+dialogId+" cid="+chatId+" uid="+userId);
+        }
+
+        if (userId == 0) {
+            otherItem.addSubItem(wgram_clear_delm_history, R.drawable.msg_delete, "Clear deleted log");
+        }
+        // end
+
         if (userId != 0) {
             TLRPC.User user = getMessagesController().getUser(userId);
             if (user == null) {
@@ -11881,8 +11928,17 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     linkItem = otherItem.addSubItem(copy_link_profile, R.drawable.msg_link2, getString(R.string.ProfileCopyLink));
                     updateItemsUsername();
                 }
+
+                // wgram feature
+                otherItem.addSubItem(wgram_clear_delm_history, R.drawable.msg_delete, "Clear deleted log in saved messages");
+                // end
+
                 selfUser = true;
             } else {
+                // wgram feature
+                otherItem.addSubItem(wgram_clear_delm_history, R.drawable.msg_delete, "Clear deleted log");
+                // end
+
                 if (user.bot && user.bot_can_edit) {
                     editItemVisible = true;
                 }
