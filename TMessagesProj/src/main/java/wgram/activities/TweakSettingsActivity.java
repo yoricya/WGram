@@ -7,6 +7,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
+import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -15,18 +16,27 @@ import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 
 import wgram.DeletedMessages;
+import wgram.Storage;
 import wgram.TweakSettings;
 import wgram.WGram;
 
 public class TweakSettingsActivity extends BaseFragment {
 
     LinearLayout linearLayout;
+    boolean hasBeenChanged = false;
     @Override
     public View createView(Context context) {
         actionBar.setTitle("Tweak Settings");
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setOnClickListener(v -> finishFragment());
+        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+            @Override
+            public void onItemClick(int id) {
+                if (id == -1) {
+                    finishFragment();
+                }
+            }
+        });
 
         linearLayout = new LinearLayout(context);
         linearLayout.setOrientation(LinearLayout.VERTICAL);
@@ -64,18 +74,21 @@ public class TweakSettingsActivity extends BaseFragment {
             boolean newState = !((TextCheckCell) v).isChecked();
             ((TextCheckCell) v).setChecked(newState);
             TweakSettings.KeepDeletedMessages = newState;
+            hasBeenChanged = true;
         });
 
         addBodySwitch(context, "Typing Hide", TweakSettings.TypingHide, true, (v) -> {
             boolean newState = !((TextCheckCell) v).isChecked();
             ((TextCheckCell) v).setChecked(newState);
             TweakSettings.TypingHide = newState;
+            hasBeenChanged = true;
         });
 
         addBodySwitch(context, "Allow Screenshots", TweakSettings.AllowScreenshots, false, (v) -> {
             boolean newState = !((TextCheckCell) v).isChecked();
             ((TextCheckCell) v).setChecked(newState);
             TweakSettings.AllowScreenshots = newState;
+            hasBeenChanged = true;
         });
 
         // Clear deleted messages button
@@ -90,7 +103,7 @@ public class TweakSettingsActivity extends BaseFragment {
 
             // mediaNoRemove
             builder.setNeutralButton("Clear with mediaNoRemove", (d, w) -> {
-                DeletedMessages.getQueue().postRunnable(() -> {
+                Storage.getQueue().postRunnable(() -> {
                     Exception e = wgram.DeletedMessages.clearDeletedMessages(true);
                     AndroidUtilities.runOnUIThread(() -> {
                         int flag = R.raw.contact_check;
@@ -108,7 +121,7 @@ public class TweakSettingsActivity extends BaseFragment {
 
             // clear all
             builder.setPositiveButton("Clear", (dialog, w) -> {
-                DeletedMessages.getQueue().postRunnable(() -> {
+                Storage.getQueue().postRunnable(() -> {
                     Exception e = wgram.DeletedMessages.clearDeletedMessages(false);
                     AndroidUtilities.runOnUIThread(() -> {
                         int flag = R.raw.contact_check;
@@ -143,5 +156,23 @@ public class TweakSettingsActivity extends BaseFragment {
         cell.setOnClickListener(listener);
         cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
         linearLayout.addView(cell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        super.onFragmentDestroy();
+        if (hasBeenChanged) {
+            Exception e = TweakSettings.saveSettingsToRom();
+            AndroidUtilities.runOnUIThread(() -> {
+                if (parentLayout != null) {
+                    BaseFragment currentTopFragment = parentLayout.getSafeLastFragment();
+                    if (e == null) {
+                        BulletinFactory.of(currentTopFragment).createSimpleBulletin(R.raw.contact_check, "Settings saved.").show();
+                    } else {
+                        BulletinFactory.of(currentTopFragment).createSimpleBulletin(R.raw.contact_check, "Failed to save changes because thrown exception.").show();
+                    }
+                }
+            });
+        }
     }
 }
