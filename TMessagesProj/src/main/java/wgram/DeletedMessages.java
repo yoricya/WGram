@@ -197,6 +197,120 @@ public class DeletedMessages {
         return false;
     }
 
+    public static Exception clearSpecificDeletedMessage(long didOrCid, int messageId, boolean deleteOnOriginStorage) {
+        if (!Thread.currentThread().getName().equals(queue.getName())) {
+            queue.postRunnable(() -> clearSpecificDeletedMessage(didOrCid, messageId, deleteOnOriginStorage));
+            return null;
+        }
+
+        if (BuildVars.DEBUG_VERSION) {
+            FileLog.d("WGram: Clear specific. did=" + didOrCid + " mid="+messageId+" delOnOrigin"+deleteOnOriginStorage);
+        }
+
+        AccountInstance instance = AccountInstance.getInstance(UserConfig.selectedAccount);
+
+        try {
+            // Remove form TG storage
+            if (deleteOnOriginStorage) {
+                ArrayList<Integer> messagesMap = new ArrayList<>();
+                messagesMap.add(messageId);
+
+                instance.getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                    ArrayList<Long> dialogIds = instance.getMessagesStorage().markMessagesAsDeleted(didOrCid, messagesMap, false, true, 0, 0);
+                    if (BuildVars.DEBUG_VERSION && dialogIds != null) {
+                        FileLog.d("WGram: Clear specific. did=" + didOrCid + " dids=" + Arrays.toString(dialogIds.toArray()));
+                    } else if (BuildVars.DEBUG_VERSION) {
+                        FileLog.d("WGram: Clear specific. did=" + didOrCid + " dids=null");
+                    }
+                    instance.getMessagesStorage().updateDialogsWithDeletedMessages(didOrCid, -didOrCid, messagesMap, dialogIds, false);
+                });
+            }
+
+            // Remove from WGram ROM storage
+            deletedMessagesROMdb.executeFast("BEGIN").stepThis().dispose();
+            SQLitePreparedStatement st = deletedMessagesROMdb.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=? AND message_id=?");
+            st.bindLong(1, instance.getUserConfig().clientUserId);
+            st.bindLong(2, didOrCid);
+            st.bindInteger(3, messageId);
+            st.step();
+            st.dispose();
+            deletedMessagesROMdb.executeFast("COMMIT").stepThis().dispose();
+
+            // Remove from WGram RAM cache
+            ConcurrentHashMap<Integer, MessageRecord> records = map.get(didOrCid);
+            if (records != null) {
+                records.remove(messageId);
+            }
+        } catch (Exception e) {
+            FileLog.e("WGram: clear specific deleted message failed", e);
+            return e;
+        }
+
+        return null;
+    }
+
+    public static Exception clearDeletedMessagesOnChat(long didOrCid, boolean deleteOnOriginStorage) {
+        if (!Thread.currentThread().getName().equals(queue.getName())) {
+            queue.postRunnable(() -> clearDeletedMessagesOnChat(didOrCid, deleteOnOriginStorage));
+            return null;
+        }
+
+        if (BuildVars.DEBUG_VERSION) {
+            FileLog.d("WGram: Clear chat. did=" + didOrCid + " delOnOrigin=" + deleteOnOriginStorage);
+        }
+
+        AccountInstance instance = AccountInstance.getInstance(UserConfig.selectedAccount);
+
+        SQLiteCursor cursor = null;
+        try {
+            cursor = deletedMessagesROMdb.queryFinalized(
+                    "SELECT message_id FROM del_m WHERE account_id=? AND dialog_id=?",
+                    instance.getUserConfig().clientUserId, didOrCid
+            );
+
+            // Parse messages from db
+            ArrayList<Integer> messagesList = new ArrayList<>();
+            while (cursor.next()) {
+                int mid = cursor.intValue(0);
+                messagesList.add(mid);
+            }
+
+            cursor.dispose();
+
+            // Remove form TG storage
+            if (deleteOnOriginStorage && !messagesList.isEmpty()) {
+                instance.getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                    ArrayList<Long> dialogIds = instance.getMessagesStorage().markMessagesAsDeleted(didOrCid, messagesList, false, true, 0, 0);
+                    if (BuildVars.DEBUG_VERSION && dialogIds == null) {
+                        FileLog.d("WGram: Clear on chat. did=" + didOrCid + " dids=null");
+                    } else if (BuildVars.DEBUG_VERSION) {
+                        FileLog.d("WGram: Clear on chat. did=" + didOrCid + " dids=" + Arrays.toString(dialogIds.toArray()));
+                    }
+                    instance.getMessagesStorage().updateDialogsWithDeletedMessages(didOrCid, -didOrCid, messagesList, dialogIds, false);
+                });
+            }
+
+            // Remove from WGram ROM storage
+            deletedMessagesROMdb.executeFast("BEGIN").stepThis().dispose();
+            SQLitePreparedStatement st = deletedMessagesROMdb.executeFast("DELETE FROM del_m WHERE account_id=? AND dialog_id=?");
+            st.bindLong(1, instance.getUserConfig().clientUserId);
+            st.bindLong(2, didOrCid);
+            st.step();
+            st.dispose();
+            deletedMessagesROMdb.executeFast("COMMIT").stepThis().dispose();
+
+            // Remove from WGram RAM cache
+            map.remove(didOrCid);
+        } catch (Exception e) {
+            FileLog.e("WGram: clear deleted messages on chat failed", e);
+            return e;
+        } finally {
+            if (cursor != null) cursor.dispose();
+        }
+
+        return null;
+    }
+
     public static Exception clearDeletedMessages(boolean mediaNoRemove) {
         if (!Thread.currentThread().getName().equals(queue.getName())) {
             queue.postRunnable(() -> clearDeletedMessages(mediaNoRemove));
